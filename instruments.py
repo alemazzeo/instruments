@@ -3,8 +3,8 @@
 import numpy as np
 import visa
 import time
-import tools.FileTools as FT
-import tools.PromptTools as PT
+from tools import FileTools as FT
+from tools import PromptTools as PT
 
 
 class SimVISA(object):
@@ -18,22 +18,28 @@ class SimVISA(object):
     def __init__(self):
         print('VISA simulation enabled')
 
-    def write(self, command):
+    def write(self, command, termination=None, encoding=None):
         # Print command in console
         print(">> " + command)
 
     def query(self, command, separator=''):
         # Print command and request simulated answer
         print(">> " + command)
-        return input("Answer: ")
+        if command == '*IDN?':
+            return "Simulated VISA Device"
+        else:
+            return input("Answer: ")
 
     def query_ascii_values(self, command, **args):
         # Print command and generate random curve
         print(">> " + command)
         return np.random.rand(100), np.random.rand(100), 0, 0
 
+    def close(*args, **kwargs):
+        pass
 
-class Instrument(object):
+
+class Instrument():
     def __init__(self, resource=None, sim_mode=False, backend="@py",
                  query='?*::INSTR', name=None, path='../'):
 
@@ -83,31 +89,43 @@ class Instrument(object):
 
             # Open resource
             self._inst = rm.open_resource(self._resource)
-            self._name = self._inst.query('*IDN?', log=False)
 
-        self._fullname = '%s/%.16s' % (self._path, self._name)
+        self._name = self._inst.query('*IDN?')
+
+        self._fullname = '%s/%.16s' % (path, name)
+        self._path = path
+
         self._log = '%s.log' % self._fullname
+        self._temp_list = list()
 
         with open(self._log, 'a') as f:
-            f.write('#' * 40 + '\n')
+            f.write('\n' + '#' * 40 + '\n')
             f.write('# %-36s #\n' % time.strftime('%x - %X'))
+            f.write('# %-36s #\n' % 'Session started')
+            f.write('# %-36s #\n' % self._resource)
+            f.write('# %-36s #\n' % self._name)
             f.write('#' * 40 + '\n')
 
     def __del__(self):
+        with open(self._log, 'a') as f:
+            f.write('\n' + '#' * 40 + '\n')
+            f.write('# %-36s #\n' % time.strftime('%x - %X'))
+            f.write('# %-36s #\n' % 'Session closed')
+            f.write('#' * 40 + '\n')
         self._inst.close()
 
     def write(self, command, termination=None, encoding=None, log=True):
         self._inst.write(command, termination, encoding)
         if log:
             with open(self._log, 'a') as f:
-                f.write(time.strftime('%X') + ">> " + command + '\n')
+                f.write(time.strftime('%X') + " >> " + command + '\n')
 
     def query(self, command, delay=None, log=True):
         answer = self._inst.query(command, delay)
         if log:
             with open(self._log, 'a') as f:
-                f.write(time.strftime('%X') + ">> " + command + '\n')
-                f.write(" " * 8 + answer + '\n')
+                f.write(time.strftime('%X') + " >> " + command + '\n')
+                f.write(' ' * 8 + ' << ' + answer + '\n')
         return answer
 
     def query_ascii_values(self, command, converter='f', separator=',',
@@ -117,14 +135,23 @@ class Instrument(object):
                                                delay)
         if log:
             with open(self._log, 'a') as f:
-                f.write(time.strftime('%X') + ">> " + command + '\n')
+                f.write(time.strftime('%X') + " >> " + command + '\n')
                 f.write(" " * 8 + answer + '\n')
         return answer
 
-    def save(self, data, fullname='../data/temp/temp.npy', verbose=False):
+    def save(self, data, fullname='../data/temp/temp.npy', log=True):
+        fullname = FT.newname(fullname)
+        np.save(fullname, data)
+        self._temp_list.append(fullname)
+        if log:
+            with open(self._log, 'a') as f:
+                f.write(time.strftime('%X') + " <> SAVED: " + fullname + '\n')
+
+    def load(self, fullname='../data/temp/temp.npy', log=True):
+        return np.load(fullname)
 
 
-class CommandGroup(object):
+class CommandGroup():
     def __init__(self, instrument):
         self._inst = instrument
 
