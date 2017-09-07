@@ -6,6 +6,8 @@ import time
 from tools import FileTools as FT
 from tools import PromptTools as PT
 
+import matplotlib.pyplot as plt
+
 
 class SimVISA(object):
     '''
@@ -41,7 +43,8 @@ class SimVISA(object):
 
 class Instrument():
     def __init__(self, resource=None, sim_mode=False, backend="@py",
-                 query='?*::INSTR', name=None, path='../'):
+                 query='?*::INSTR', name=None, 
+                 path='D:/ALUMNOS/Grupo 1/Espectro Rb'):
 
         if sim_mode:
             # Create a simulated instrument
@@ -49,9 +52,10 @@ class Instrument():
             self._inst = SimVISA()
 
         else:
+            rm = visa.ResourceManager(backend)
             # Help to find resource
             if resource is None:
-                rm = visa.ResourceManager(backend)
+                
                 available = rm.list_resources_info(query=query)
 
                 # Filter results with the (optional) name provided
@@ -92,7 +96,7 @@ class Instrument():
 
         self._name = self._inst.query('*IDN?')
 
-        self._fullname = '%s/%.16s' % (path, name)
+        self._fullname = '%s/%.16s' % (path, self._name)
         self._path = path
 
         self._log = '%s.log' % self._fullname
@@ -158,22 +162,68 @@ class CommandGroup():
 
 class Oscilloscope(Instrument):
     def __init__(self, resource=None, sim_mode=False, backend="@py",
-                 query='?*::INSTR', name=None, path='../'):
+                 query='?*::INSTR', name=None, 
+                 path='D:/ALUMNOS/Grupo 1/Espectro Rb'):
 
-        Instrument.__init__(resource, sim_mode, backend, query, name, path)
+        Instrument.__init__(self, resource, sim_mode, 
+                            backend, query, name, path)
+        
+        self._xze = None
+        self._xin = None
+        self._yze = None
+        self._ymu = None
+        self._yoff = None
+        
+        self.config_curve()
 
-    def config_curve(self, mode='RPB', width=1, start=1, stop=2500):
+    def config_curve(self, canal=1, mode='RPB', width=1, start=1, stop=2500):
+        self._inst.write('DAT:SOU CH%d' % canal)
         self._inst.write('DAT:ENC %s' % mode)
         self._inst.write('DAT:WID %d' % width)
         self._inst.write('DAT:STAR %d' % start)
         self._inst.write('DAT:STOP %d' % stop)
+        query = 'WFMPRE:XZE?;XIN?;YZE?;YMU?;YOFF?;'
+        xze, xin, yze, ymu, yoff = self._inst.query_ascii_values(query, 
+                                                                 separator=';')
+        self._xze = xze
+        self._xin = xin
+        self._yze = yze
+        self._ymu = ymu
+        self._yoff = yoff      
 
-    def config(self):
+    def config_acq(self):
         self._inst.write('ACQ:MOD SAMP')
+        
+    def get_curve(self):
+        data = self._inst.query_binary_values('CURV?', datatype='B', 
+                                               container=np.array) 
+        data = (data - self._yoff) * self._ymu + self._yze
+        time = self._xze + np.arange(len(data)) * self._xin
+        
+        return data, time
+        
 
 
 class ITC4001(Instrument):
     def __init__(self, resource=None, sim_mode=False, backend="@py",
-                 query='?*::INSTR', name=None, path='../'):
+                 query='?*::INSTR', name=None,
+                 path='D:/ALUMNOS/Grupo 1/Espectro Rb'):
 
-        Instrument.__init__(resource, sim_mode, backend, query, name, path)
+        Instrument.__init__(self, resource, sim_mode, backend, query, name, 
+                            path)
+    
+    # Cambiar idioma
+    def medir(self, cantidad='TEMP', n=10000, ax=None, **kwargs):
+        Temp = np.zeros(n, dtype=float)
+        Tiempo = np.zeros(n, dtype=float)
+        for i in range(n):
+            Tiempo[i] = time.time()    
+            Temp[i] = self.query('MEAS:%4s?' % cantidad, log=False)
+            
+        Tiempo = Tiempo - Tiempo[0]
+        
+        if ax is None:
+            fig, ax = plt.subplots(1)
+            
+        ax.plot(Tiempo, Temp, **kwargs)
+        return Tiempo, Temp
