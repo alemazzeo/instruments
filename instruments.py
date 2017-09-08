@@ -5,8 +5,9 @@ import visa
 import time
 from tools import FileTools as FT
 from tools import PromptTools as PT
+from tools import LogTools as LT
 
-import matplotlib.pyplot as plt
+MAX_LOG_ANSWERS = 10
 
 
 class SimVISA(object):
@@ -28,7 +29,7 @@ class SimVISA(object):
         # Print command and request simulated answer
         print(">> " + command)
         if command == '*IDN?':
-            return "Simulated VISA Device"
+            return "Simulated VISA Device, SimVISA"
         else:
             return input("Answer: ")
 
@@ -43,8 +44,7 @@ class SimVISA(object):
 
 class Instrument():
     def __init__(self, resource=None, sim_mode=False, backend="@py",
-                 query='?*::INSTR', name=None, 
-                 path='D:/ALUMNOS/Grupo 1/Espectro Rb'):
+                 query='?*::INSTR', name=None, path='./'):
 
         if sim_mode:
             # Create a simulated instrument
@@ -55,8 +55,8 @@ class Instrument():
             rm = visa.ResourceManager(backend)
             # Help to find resource
             if resource is None:
-                
-                available = rm.list_resources_info(query=query)
+
+                available = rm.list_resources(query=query)
 
                 # Filter results with the (optional) name provided
                 if name is not None:
@@ -69,8 +69,7 @@ class Instrument():
                     options = list()
                     for i, item in enumerate(available):
                         resources.append(item)
-                        rsc_name = available[item].resource_name
-                        option = '%s\n    (%s)' % (item, rsc_name)
+                        option = '%s' % item
                         options.append(option)
 
                     # Make a list for multiples values
@@ -94,42 +93,35 @@ class Instrument():
             # Open resource
             self._inst = rm.open_resource(self._resource)
 
-        self._name = self._inst.query('*IDN?')
+        self._idn = self._inst.query('*IDN?')
+        self._name = self._idn.split(',')[0] + '-' + self._idn.split(',')[1]
 
-        self._fullname = '%s/%.16s' % (path, self._name)
+        self._fullname = '%s/%s' % (path, self._name)
         self._path = path
+        self._path_data = path + '/data/temp.npy'
 
-        self._log = '%s.log' % self._fullname
+        self._log = LT('%{}.log'.format(self._fullname))
         self._temp_list = list()
 
-        with open(self._log, 'a') as f:
-            f.write('\n' + '#' * 40 + '\n')
-            f.write('# %-36s #\n' % time.strftime('%x - %X'))
-            f.write('# %-36s #\n' % 'Session started')
-            f.write('# %-36s #\n' % self._resource)
-            f.write('# %-36s #\n' % self._name)
-            f.write('#' * 40 + '\n')
+        self._log.block(time.strftime('%x - %X'),
+                        'Session started',
+                        self._resource,
+                        self._name)
 
     def __del__(self):
-        with open(self._log, 'a') as f:
-            f.write('\n' + '#' * 40 + '\n')
-            f.write('# %-36s #\n' % time.strftime('%x - %X'))
-            f.write('# %-36s #\n' % 'Session closed')
-            f.write('#' * 40 + '\n')
+        self._log.block(time.strftime('%x - %X'),
+                        'Session closed')
         self._inst.close()
 
     def write(self, command, termination=None, encoding=None, log=True):
         self._inst.write(command, termination, encoding)
         if log:
-            with open(self._log, 'a') as f:
-                f.write(time.strftime('%X') + " >> " + command + '\n')
+            self._log.time_stamp(command)
 
     def query(self, command, delay=None, log=True):
         answer = self._inst.query(command, delay)
         if log:
-            with open(self._log, 'a') as f:
-                f.write(time.strftime('%X') + " >> " + command + '\n')
-                f.write(' ' * 8 + ' << ' + answer + '\n')
+            self._log.time_stamp(command, answer)
         return answer
 
     def query_ascii_values(self, command, converter='f', separator=',',
@@ -138,20 +130,34 @@ class Instrument():
                                                separator, container,
                                                delay)
         if log:
-            with open(self._log, 'a') as f:
-                f.write(time.strftime('%X') + " >> " + command + '\n')
-                f.write(" " * 8 + answer + '\n')
+            if len(answer) < MAX_LOG_ANSWERS:
+                for value in answer:
+                    self._log.time_selftamp(answer=value)
+            else:
+                save = self.save(answer)
+                self._log.time_stamp(command, answer=save)
         return answer
 
-    def save(self, data, fullname='../data/temp/temp.npy', log=True):
-        fullname = FT.newname(fullname)
+    def query_binary_values(self, command, datatype='f', is_big_endian=False,
+                            container=list, delay=None, header_fmt='ieee',
+                            log=True):
+
+        answer = self._inst.query_binary_values(command, datatype,
+                                                is_big_endian, container,
+                                                delay, header_fmt)
+        if log:
+            save = self.save(answer)
+            self._log.time_stamp(command, answer=save)
+        return answer
+
+    def save(self, data, fullname='temp.npy'):
+        fullname = FT.newname(fullname, default=self._path_data)
         np.save(fullname, data)
         self._temp_list.append(fullname)
-        if log:
-            with open(self._log, 'a') as f:
-                f.write(time.strftime('%X') + " <> SAVED: " + fullname + '\n')
+        return fullname
 
-    def load(self, fullname='../data/temp/temp.npy', log=True):
+    def load(self, fullname='temp.npy'):
+        fullname = FT.file_exist(fullname, default_path=self._path_data)
         return np.load(fullname)
 
 
@@ -162,68 +168,90 @@ class CommandGroup():
 
 class Oscilloscope(Instrument):
     def __init__(self, resource=None, sim_mode=False, backend="@py",
-                 query='?*::INSTR', name=None, 
-                 path='D:/ALUMNOS/Grupo 1/Espectro Rb'):
+                 query='?*::INSTR', name=None, path='./'):
 
-        Instrument.__init__(self, resource, sim_mode, 
+        Instrument.__init__(self, resource, sim_mode,
                             backend, query, name, path)
-        
+
         self._xze = None
         self._xin = None
         self._yze = None
         self._ymu = None
         self._yoff = None
-        
-        self.config_curve()
 
-    def config_curve(self, canal=1, mode='RPB', width=1, start=1, stop=2500):
-        self._inst.write('DAT:SOU CH%d' % canal)
-        self._inst.write('DAT:ENC %s' % mode)
-        self._inst.write('DAT:WID %d' % width)
-        self._inst.write('DAT:STAR %d' % start)
-        self._inst.write('DAT:STOP %d' % stop)
+        self.setup_curve()
+        self.get_waveform_preamble()
+
+    def setup_curve(self, source='CH1', mode='RPB',
+                    width=1, start=1, stop=2500):
+
+        self._inst.write('DATa:SOUrce {}'.format(source))
+        self._inst.write('DATa:ENC {}'.format(mode))
+        self._inst.write('DATa:WIDth {}'.format(width))
+        self._inst.write('DATa:STARt {}'.format(start))
+        self._inst.write('DATa:STOP {}'.format(stop))
+
+    def get_waveform_preamble(self, log=False):
         query = 'WFMPRE:XZE?;XIN?;YZE?;YMU?;YOFF?;'
-        xze, xin, yze, ymu, yoff = self._inst.query_ascii_values(query, 
-                                                                 separator=';')
-        self._xze = xze
-        self._xin = xin
-        self._yze = yze
-        self._ymu = ymu
-        self._yoff = yoff      
+        answer = self.query_ascii_values(query, separator=';', log=log)
+        self._xze = answer[0]
+        self._xin = answer[1]
+        self._yze = answer[2]
+        self._ymu = answer[3]
+        self._yoff = answer[4]
 
-    def config_acq(self):
-        self._inst.write('ACQ:MOD SAMP')
-        
-    def get_curve(self):
-        data = self._inst.query_binary_values('CURV?', datatype='B', 
-                                               container=np.array) 
-        data = (data - self._yoff) * self._ymu + self._yze
-        time = self._xze + np.arange(len(data)) * self._xin
-        
-        return data, time
-        
+    def get_curve(self, auto_wfmpre=True, log=True):
+        if auto_wfmpre:
+            self.get_waveform_preamble(log=log)
+
+        y = self._inst.query_binary_values('CURV?', datatype='B',
+                                           container=np.array)
+        y = (y - self._yoff) * self._ymu + self._yze
+        x = self._xze + np.arange(len(y)) * self._xin
+
+        if log:
+            save = self.save([x, y])
+            self._log.time_stamp('CURV?', answer=save)
+
+        return x, y
 
 
 class ITC4001(Instrument):
     def __init__(self, resource=None, sim_mode=False, backend="@py",
-                 query='?*::INSTR', name=None,
-                 path='D:/ALUMNOS/Grupo 1/Espectro Rb'):
+                 query='?*::INSTR', name=None, path='./'):
 
-        Instrument.__init__(self, resource, sim_mode, backend, query, name, 
-                            path)
-    
-    # Cambiar idioma
-    def medir(self, cantidad='TEMP', n=10000, ax=None, **kwargs):
-        Temp = np.zeros(n, dtype=float)
-        Tiempo = np.zeros(n, dtype=float)
+        Instrument.__init__(self, resource, sim_mode,
+                            backend, query, name, path)
+
+    def measurement(self, scalar='TEMP', log=True):
+        self.query('MEAS:{}'.format(scalar), log=log)
+
+    def current_setpoint(self, current, log=True):
+        self.write('SOUR:CURR {}'.format(current))
+
+    def temperature_setpoint(self, temp, log=True):
+        self.write('SOUR2:TEMP {}c'.format(temp))
+
+    def sweep_temp(self, Ti=22.5, Tf=23.5, dT=0.01, dtime=4,
+                   func=None, func_args=None):
+
+        n = int((Tf - Ti) / dT)
+        dT = dT * np.sign(Tf - Ti)
+        T = np.zeros(n, dtype=float)
+        t = np.zeros(n, dtype=float)
+
+        self._inst.write('SOUR2:TEMP {}'.format(Ti))
+
         for i in range(n):
-            Tiempo[i] = time.time()    
-            Temp[i] = self.query('MEAS:%4s?' % cantidad, log=False)
-            
-        Tiempo = Tiempo - Tiempo[0]
-        
-        if ax is None:
-            fig, ax = plt.subplots(1)
-            
-        ax.plot(Tiempo, Temp, **kwargs)
-        return Tiempo, Temp
+            t[i] = time.time()
+            T[i] = self._inst('MEAS:TEMP?')
+
+            if func is not None:
+                func(i, *func_args)
+
+            time.delay(dtime)
+            self._inst.write('SOUR2:TEMP {}'.format(Ti + i * dT))
+
+        t = t - t[0]
+
+        return t, T

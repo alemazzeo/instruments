@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import time
 
 
 class FileTools():
@@ -118,3 +119,38 @@ class PromptTools():
         while choice not in ('yes', 'y', '', 'no', 'n'):
             choice = input("%s (%s) " % (message, choices)).lower()
         return choice.strip().lower() in values
+
+
+class LogTools():
+
+    def __init__(self, filename, if_exist='a'):
+        self._file = filename
+
+    def time_stamp(self, message=None, answer=None, style='%X'):
+        with open(self._file, 'a') as f:
+            if message is not None:
+                f.write(time.strftime(style) + " >> " + message + '\n')
+            if answer is not None:
+                f.write(' ' * 8 + ' << ' + answer + '\n')
+            f.write('\n')
+
+    def annontate(self, comment, style='%X'):
+        with open(self._file, 'a') as f:
+            f.write(time.strftime(style) + " ## " + comment + '\n')
+            f.write('\n')
+
+    def block(self, *args, border='#', inside=' ', align='<', width=70):
+
+        template = '{left}{:{i}{a}{w}.{w}}{right}'
+        params = {'left': border + ' ',
+                  'right': ' ' + border,
+                  'i': inside,
+                  'a': align,
+                  'w': width - 4}
+
+        with open(self._file, 'a') as f:
+            f.write(border * width + '\n')
+            for line in args:
+                f.write(template.format(line, **params) + '\n')
+            f.write(border * width + '\n')
+            f.write('\n')
