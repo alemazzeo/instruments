@@ -161,6 +161,51 @@ class Instrument():
         return np.load(fullname)
 
 
-class CommandGroup():
-    def __init__(self, instrument):
-        self._inst = instrument
+class CommandGroup(object):
+
+    def __init__(self, inst):
+        self._inst = inst
+
+    def _option_list(self, value, options, floats=None):
+        error = 'Type option or number (0-{})'.format(len(options))
+        upper_options = (opt.upper() for opt in options)
+
+        if isinstance(value, int):
+            if 0 <= value <= len(options):
+                return value
+            else:
+                for i, opt in enumerate(options):
+                    print('{} - {}'.format(i, opt))
+                raise ValueError(error)
+
+        elif isinstance(value, str):
+            if value.upper() in upper_options:
+                return upper_options.index(value.upper())
+            else:
+                for i, opt in enumerate(options):
+                    print('{} - {}'.format(i, opt))
+                raise ValueError(error)
+
+        elif isinstance(value, float):
+            if floats is None:
+                raise ValueError(error)
+            else:
+                if value in floats:
+                    return floats.index(value)
+                else:
+                    raise ValueError(error)
+
+        else:
+            raise ValueError(error)
+
+    def _option_limited(self, value, vmin, vmax, prec=4):
+        error = '{:.{p}f} <= value <= {:.{p}f}'.format(vmin, vmax, p=prec)
+        try:
+            value = float(value)
+        except:
+            raise ValueError(error)
+
+        if vmin <= value <= vmax:
+            return value
+        else:
+            raise ValueError(error)
