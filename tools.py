@@ -152,5 +152,15 @@ class LogTools():
             f.write(border * width + '\n')
             for line in args:
                 f.write(template.format(line, **params) + '\n')
-            f.write(border * width + '\n')
+            f.write(border * width + '\n\n')
+
+    def underline(self, text, style='-'):
+        with open(self._file, 'a') as f:
+            f.write(text + '\n')
+            f.write(style * len(text) + '\n\n')
+
+    def tabulated_lines(self, lines, tab=4, space=' '):
+        with open(self._file, 'a') as f:
+            for line in lines:
+                f.write(space * tab + line + '\n')
             f.write('\n')

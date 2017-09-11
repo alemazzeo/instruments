@@ -209,3 +209,6 @@ class CommandGroup(object):
             return value
         else:
             raise ValueError(error)
+
+    def _format_property(self, name, value, unit=''):
+        return '{:_<22.20} {:15} {:10}{}'.format(name + ':', value)
