@@ -69,7 +69,7 @@ class Instrument():
                     options = list()
                     for i, item in enumerate(available):
                         resources.append(item)
-                        option = '%s' % item
+                        option = '{:s}'.format(item)
                         options.append(option)
 
                     # Make a list for multiples values
@@ -100,7 +100,7 @@ class Instrument():
         self._path = path
         self._path_data = path + '/data/temp.npy'
 
-        self._log = LT('%{}.log'.format(self._fullname))
+        self._log = LT('{}.log'.format(self._fullname))
         self._temp_list = list()
 
         self._log.block(time.strftime('%x - %X'),

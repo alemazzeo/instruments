@@ -485,7 +485,7 @@ class _lockin_ch2(CommandGroup):
 class _lockin_interface(CommandGroup):
 
     def __init__(self, inst):
-        CommandGroup.__init__(inst)
+        CommandGroup.__init__(self, inst)
 
         self._cstpLock = ('Local', 'Remote', 'Local Lockout')
 
