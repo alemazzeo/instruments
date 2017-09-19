@@ -293,7 +293,7 @@ class _lockin_auxout(CommandGroup):
 
     def _log(self):
         self._inst._log.underline('Auxiliar outputs:')
-        self._inst._log.tabulated_lines(self._list_properties)
+        self._inst._log.tabulated_lines(self._list_properties())
 
 
 class _lockin_ch1(CommandGroup):
@@ -658,11 +658,11 @@ class _lockin_adquisition(CommandGroup):
 
     @property
     def buffer_stored(self):
-        return self._inst.query('SPTS?', log=False)
+        return int(self._inst.query('SPTS?', log=False))
 
-    def buffer_one_shoot(self, display, sample_rate='64 Hz', points=16383,
+    def buffer_one_shoot(self, sample_rate='64 Hz', points=16383,
                          wait=True):
-
+    
         strFreqs = ('62.5 mHz', '125 mHz', '250 mHz', '500 mHz', '1 Hz',
                     '2 Hz', '4 Hz', '8 Hz', '16 Hz', '32 Hz',
                     '64 Hz', '128 Hz', '256 Hz', '512 Hz')
@@ -670,9 +670,6 @@ class _lockin_adquisition(CommandGroup):
         floatFreqs = (0.0625, 0.125, 0.25, 0.5, 1.0,
                       2.0, 4.0, 8.0, 16.0, 32.0,
                       64.0, 128.0, 256.0, 512.0)
-
-        if display not in [1, 2]:
-            raise ValueError('Expected 1 or 2')
 
         i = self._option_list(sample_rate, strFreqs, floatFreqs)
 
@@ -682,7 +679,7 @@ class _lockin_adquisition(CommandGroup):
         self._inst.write('SRAT {}'.format(i), log=False)
         self._inst.write('SEND 0', log=False)
         print('Buffer reset', end='')
-        self._ints.write('REST', log=False)
+        self._inst.write('REST', log=False)
         print('. Done')
         self._inst.write('STRT', log=False)
         print('Buffer storage in progress')
@@ -692,7 +689,7 @@ class _lockin_adquisition(CommandGroup):
         if wait:
             while pr < points:
                 pr = self.buffer_stored
-                msg = 'Remaining: {:5d}/{:5d}'.format(pr, points)
+                msg = '\rRemaining: {:5d}/{:5d}'.format(pr, points)
                 print(msg, end='\r')
                 time.sleep(0.1)
             print(msg + '. Done')
@@ -702,22 +699,17 @@ class _lockin_adquisition(CommandGroup):
         if not (1 <= end <= 16383) or start > end:
             raise ValueError('Points out of range (0 to 16383)')
 
-        if end < self.buffer_stored:
+        if end > self.buffer_stored:
             raise ValueError('Not enough points in buffer yet')
 
         if self._inst.query('SEND?', log=False) == 1:
             self._inst.write('PAUS', log=False)
 
-        command = 'TRCB? {}, {}, {}'.format(display, start, end)
+        command = 'TRCA? {}, {}, {}'.format(display, start, end)
 
-        current_timeout = self._inst.timeout
-        self._inst.timeout = None
+        self._inst._inst.write(command)
+        data_raw = self._inst._inst.read_raw()
+        data = data_raw.decode()[0:-1]
+        data = data.split(',')
 
-        data = self._inst.query_ascii_values(command,
-                                             converter='f',
-                                             separator=',',
-                                             container=np.array)
-
-        self._inst.timeout = current_timeout
-
-        return data
+        return np.asarray(data, dtype=float)

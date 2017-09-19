@@ -132,7 +132,7 @@ class Instrument():
         if log:
             if len(answer) < MAX_LOG_ANSWERS:
                 for value in answer:
-                    self._log.time_selftamp(answer=value)
+                    self._log.time_stamp(answer=value)
             else:
                 save = self.save(answer)
                 self._log.time_stamp(command, answer=save)
@@ -168,7 +168,7 @@ class CommandGroup(object):
 
     def _option_list(self, value, options, floats=None):
         error = 'Type option or number (0-{})'.format(len(options))
-        upper_options = (opt.upper() for opt in options)
+        upper_options = [opt.upper() for opt in options]
 
         if isinstance(value, int):
             if 0 <= value <= len(options):
