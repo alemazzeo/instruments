@@ -32,6 +32,9 @@ class _lockin_reference(CommandGroup):
 
     def _set_refFreq(self, value):
         f = self._option_limited(value, vmin=0.001, vmax=102000, prec=3)
+        harm = int(self._inst.query('HARM?'))
+        if harm * f > 102000:
+            raise ValueError('harm * freq <= 102000Hz')
         self._inst.write('FREQ {0:f}'.format(f))
 
     def _get_refAmpl(self):
@@ -50,7 +53,7 @@ class _lockin_reference(CommandGroup):
         try:
             self._option_limited(i * freq, vmin=0, vmax=102000.0, prec=4)
         except ValueError:
-            raise ValueError('value * freq <= 102000Hz')
+            raise ValueError('harm * freq <= 102000Hz')
         self._inst.write('HARM {0}'.format(i))
 
     def _get_refRslp(self):
@@ -61,7 +64,7 @@ class _lockin_reference(CommandGroup):
         self._inst.write('RSLP {0}'.format(i))
 
     Phase = property(_get_refPhase, _set_refPhase)
-    Mode = property(_get_refMode, _set_refMode)
+    Source = property(_get_refMode, _set_refMode)
     Frequency = property(_get_refFreq, _set_refFreq)
     Amplitude = property(_get_refAmpl, _set_refAmpl)
     Harmonic = property(_get_refHarm, _set_refHarm)
@@ -308,7 +311,7 @@ class _lockin_ch1(CommandGroup):
 
     def _get_ch1Mode(self):
         d, r = self._inst.query_ascii_values('DDEF? 1', separator=',')
-        return self._cch1Mode[d]
+        return self._cch1Mode[int(d)]
 
     def _set_ch1Mode(self, value):
         d, r = self._inst.query_ascii_values('DDEF? 1', separator=',')
@@ -317,7 +320,7 @@ class _lockin_ch1(CommandGroup):
 
     def _get_ch1RatS(self):
         d, r = self._inst.query_ascii_values('DDEF? 1', separator=',')
-        return self._cch1Rats[r]
+        return self._cch1Rats[int(r)]
 
     def _set_ch1RatS(self, value):
         d, r = self._inst.query_ascii_values('DDEF? 1', separator=',')

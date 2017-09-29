@@ -131,7 +131,7 @@ class LogTools():
             if message is not None:
                 f.write(time.strftime(style) + " >> " + message + '\n')
             if answer is not None:
-                f.write(' ' * 8 + ' << ' + answer + '\n')
+                f.write(' ' * 8 + ' << {} \n'.format(answer))
             f.write('\n')
 
     def annontate(self, comment, style='%X'):

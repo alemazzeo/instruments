@@ -19,10 +19,15 @@ class Lockin(Instrument):
     '''
 
     def __init__(self, resource=None, sim_mode=False, backend="@py",
-                 query='?*::INSTR', name=None, path='./'):
+                 query='GPIB?*::INSTR', name=None, path='./'):
 
         Instrument.__init__(self, resource, sim_mode,
                             backend, query, name, path)
+        
+        if not self._name == 'Stanford_Research_Systems-SR830':
+            raise Warning('Using {}'.format(self._name))
+          
+        self._inst.write('OUTX 1')
 
         self.adquisition = _lockin_adquisition(self)
         self.input_panel = _lockin_input(self)
@@ -33,3 +38,6 @@ class Lockin(Instrument):
         self.interface_panel = _lockin_interface(self)
         self.reference_panel = _lockin_reference(self)
         self.auxiliar_outs = _lockin_auxout(self)
+        
+    #def is_illegal(self):
+        

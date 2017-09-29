@@ -112,14 +112,28 @@ class Instrument():
         self._log.block(time.strftime('%x - %X'),
                         'Session closed')
         self._inst.close()
+        
+    def is_illegal(self):
+        return False
+    
+    def is_out_range(self):
+        return False
 
     def write(self, command, termination=None, encoding=None, log=True):
         self._inst.write(command, termination, encoding)
+        if self.is_illegal():
+            raise ValueError('Illegal command is received')
+        if self.is_out_range():
+            raise ValueError('Parameter is out of range')
         if log:
             self._log.time_stamp(command)
 
     def query(self, command, delay=None, log=True):
         answer = self._inst.query(command, delay)
+        if self.is_illegal():
+            raise ValueError('Illegal command is received')
+        if self.is_out_range():
+            raise ValueError('Parameter is out of range')
         if log:
             self._log.time_stamp(command, answer)
         return answer
@@ -129,6 +143,10 @@ class Instrument():
         answer = self._inst.query_ascii_values(command, converter,
                                                separator, container,
                                                delay)
+        if self.is_illegal():
+            raise ValueError('Illegal command is received')
+        if self.is_out_range():
+            raise ValueError('Parameter is out of range')
         if log:
             if len(answer) < MAX_LOG_ANSWERS:
                 for value in answer:
@@ -145,6 +163,10 @@ class Instrument():
         answer = self._inst.query_binary_values(command, datatype,
                                                 is_big_endian, container,
                                                 delay, header_fmt)
+        if self.is_illegal():
+            raise ValueError('Illegal command is received')
+        if self.is_out_range():
+            raise ValueError('Parameter is out of range')
         if log:
             save = self.save(answer)
             self._log.time_stamp(command, answer=save)
@@ -167,11 +189,11 @@ class CommandGroup(object):
         self._inst = inst
 
     def _option_list(self, value, options, floats=None):
-        error = 'Type option or number (0-{})'.format(len(options))
+        error = 'Type option or number (0-{})'.format(len(options)-1)
         upper_options = [opt.upper() for opt in options]
 
         if isinstance(value, int):
-            if 0 <= value <= len(options):
+            if 0 <= value <= len(options-1):
                 return value
             else:
                 for i, opt in enumerate(options):
